@@ -1,4 +1,4 @@
-Dockerization & CI/CD Documentation for first-servlet-app
+##Dockerization & CI/CD Documentation for first-servlet-app##
 1. Project Overview
 first-servlet-app is a Java web application. The CI/CD pipeline automates:
 Git clone
