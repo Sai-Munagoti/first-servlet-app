@@ -19,7 +19,6 @@
     </properties>
 
     <dependencies>
-
         <dependency>
             <groupId>javax.servlet</groupId>
             <artifactId>javax.servlet-api</artifactId>
@@ -33,7 +32,6 @@
             <version>5.9.2</version>
             <scope>test</scope>
         </dependency>
-
     </dependencies>
 
     <build>
@@ -61,12 +59,19 @@
         </plugins>
     </build>
 
-    <!-- Nexus Release Repository -->
+    <!-- Nexus Repositories -->
     <distributionManagement>
+        <!-- Release Repository -->
         <repository>
             <id>maven-releases</id>
             <url>http://51.20.35.90:8081/repository/maven-releases/</url>
         </repository>
+
+        <!-- Snapshot Repository -->
+        <snapshotRepository>
+            <id>maven-snapshots</id>
+            <url>http://51.20.35.90:8081/repository/maven-snapshots/</url>
+        </snapshotRepository>
     </distributionManagement>
 
 </project>
