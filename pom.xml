@@ -20,7 +20,7 @@
 
     <dependencies>
 
-        <!-- Use javax.servlet API so your current code works -->
+        <!-- javax.servlet API for your servlet code -->
         <dependency>
             <groupId>javax.servlet</groupId>
             <artifactId>javax.servlet-api</artifactId>
@@ -28,7 +28,7 @@
             <scope>provided</scope>
         </dependency>
 
-        <!-- Modern JUnit 5 -->
+        <!-- JUnit 5 -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
@@ -42,7 +42,6 @@
         <finalName>first-servlet-app</finalName>
 
         <plugins>
-
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
@@ -61,8 +60,17 @@
                     <failOnMissingWebXml>false</failOnMissingWebXml>
                 </configuration>
             </plugin>
-
         </plugins>
     </build>
+
+    <!-- ----------------------------- -->
+    <!-- Nexus Deployment (Releases Only) -->
+    <!-- ----------------------------- -->
+    <distributionManagement>
+        <repository>
+            <id>maven-releases</id>
+            <url>http://51.20.35.90:8081/repository/maven-releases/</url>
+        </repository>
+    </distributionManagement>
 
 </project>
