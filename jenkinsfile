@@ -1,0 +1,139 @@
+pipeline {
+    agent any
+
+    environment {
+        REPO = "munagotisai/first-servlet-app"
+        NEXUS_URL = "http://51.20.35.90:8081"
+        NEXUS_RELEASE_REPO = "maven-releases"
+        NEXUS_SNAPSHOT_REPO = "maven-snapshots"
+        SONAR_TOKEN = credentials('Sonar')  // SonarQube token
+    }
+
+    tools {
+        maven 'Maven3'
+    }
+
+    stages {
+
+        stage('Clone') {
+            steps {
+                git branch: 'main', url: 'https://github.com/Sai-Munagoti/first-servlet-app.git'
+            }
+        }
+
+        stage('Code Quality - SonarQube') {
+            steps {
+                withSonarQubeEnv('sonar') {
+                    sh "mvn clean verify sonar:sonar -Dsonar.login=${SONAR_TOKEN}"
+                }
+            }
+        }
+
+        stage('Build Artifact') {
+            steps {
+                sh 'mvn clean package'
+            }
+        }
+
+        stage('Upload to Nexus') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'Nexus', usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
+                    script {
+                        // Determine project version
+                        def version = sh(script: "mvn help:evaluate -Dexpression=project.version -q -DforceStdout", returnStdout: true).trim()
+                        def repo = version.endsWith('-SNAPSHOT') ? env.NEXUS_SNAPSHOT_REPO : env.NEXUS_RELEASE_REPO
+
+                        echo "Deploying version ${version} to ${repo} repository"
+
+                        // Create temporary Maven settings.xml with credentials
+                        writeFile file: 'settings.xml', text: """
+<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0
+                              http://maven.apache.org/xsd/settings-1.0.0.xsd">
+  <servers>
+    <server>
+      <id>${env.NEXUS_SNAPSHOT_REPO}</id>
+      <username>${NEXUS_USER}</username>
+      <password>${NEXUS_PASS}</password>
+    </server>
+    <server>
+      <id>${env.NEXUS_RELEASE_REPO}</id>
+      <username>${NEXUS_USER}</username>
+      <password>${NEXUS_PASS}</password>
+    </server>
+  </servers>
+</settings>
+"""
+                        // Deploy using settings.xml
+                        sh 'mvn deploy -s settings.xml'
+                    }
+                }
+            }
+        }
+
+        stage('Get Latest Artifact from Nexus') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'Nexus', usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
+                    script {
+                        // Fetch maven-metadata.xml
+                        def artifactMetadata = sh(
+                            script: "curl -s -u ${NEXUS_USER}:${NEXUS_PASS} ${NEXUS_URL}/repository/${NEXUS_SNAPSHOT_REPO}/com/aja/first-servlet-app/maven-metadata.xml",
+                            returnStdout: true
+                        ).trim()
+
+                        // Extract versions safely (no Matcher variable stored)
+                        def versions = (artifactMetadata =~ /<version>(.+?)<\/version>/).collect { it[1] }
+                        if (versions.isEmpty()) {
+                            error "No versions found in maven-metadata.xml. Check repository path."
+                        }
+
+                        def latestVersion = versions[-1] // last version
+                        echo "Downloading version: ${latestVersion}"
+
+                        // Download artifact
+                        sh "curl -u ${NEXUS_USER}:${NEXUS_PASS} -o app.war ${NEXUS_URL}/repository/${NEXUS_SNAPSHOT_REPO}/com/aja/first-servlet-app/${latestVersion}/first-servlet-app-${latestVersion}.war"
+                    }
+                }
+            }
+        }
+
+        stage('Dockerize Application') {
+            steps {
+                writeFile file: 'Dockerfile', text: """
+FROM tomcat:9
+COPY app.war /usr/local/tomcat/webapps/
+"""
+                sh "docker build -t ${REPO}:latest ."
+            }
+        }
+
+        stage('Push to DockerHub') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
+                    sh "echo $PASS | docker login -u $USER --password-stdin && docker push ${REPO}:latest"
+                }
+            }
+        }
+
+        stage('Deploy to Tomcat Container') {
+            steps {
+                sh """
+                    docker stop tomcat-app || true
+                    docker rm tomcat-app || true
+                    docker run -d --name tomcat-app -p 9090:8080 ${REPO}:latest
+                """
+            }
+        }
+    }
+
+    post {
+        success {
+            echo 'Pipeline executed successfully!'
+        }
+        failure {
+            echo 'Pipeline failed!'
+        }
+    }
+}
+
